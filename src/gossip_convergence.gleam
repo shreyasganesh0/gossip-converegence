@@ -5,11 +5,16 @@ import gleam/int
 import gleam/bool
 import gleam/result
 
+import gossip
+import push_sum
+import topology
+
 pub type ParseError {
 
     InvalidArgs
     WrongArgCount(required: Int)
 }
+
 
 pub fn main() -> Nil {
     let ret = case argv.load().arguments {
@@ -56,6 +61,24 @@ pub fn main() -> Nil {
                 ", topology: " <> topology <> 
                 ", algorithm: " <> algorithm
             )
+
+            let topo = case topology {
+
+                "full" -> topology.Full
+                "3D" -> topology.Grid3D
+                "line" -> topology.Line
+                "imp3D" -> topology.Imp3D
+                _ -> panic as "[MAIN]: this should never happen. Matched some random topo"
+            }
+            case algorithm {
+
+                "gossip" -> gossip.start(num_nodes, topo)
+
+                _ -> {
+
+                    push_sum.start(num_nodes, topo)
+                }
+            }
         }
 
         Error(err) -> {

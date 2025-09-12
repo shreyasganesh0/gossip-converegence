@@ -1,3 +1,6 @@
+import gleam/io
+import gleam/int
+import gleam/list
 
 import gleam/otp/actor
 import gleam/otp/static_supervisor as supervisor
@@ -9,16 +12,17 @@ import utls
 
 pub type PushSumMessage {
 
+    InitActorState(neb_actors: List(process.Subject(PushSumMessage)))
+
     SumWeight(s: Int, w: Int)
 }
 
 pub type PushSumState {
     
-    PushSumStateTmp
-
     PushSumState(
         x: Int,
         w: Int,
+        neb_list: List(process.Subject(PushSumMessage)),
     )
 }
 pub fn start(num_nodes: Int, topology: topology.Type) {
@@ -27,14 +31,31 @@ pub fn start(num_nodes: Int, topology: topology.Type) {
 
     let sup_builder = supervisor.new(supervisor.OneForOne)
 
-    let init_state = PushSumStateTmp
-    let #(builder, actors_list) = utls.start_actors(num_nodes, init_state, handle_pushsum, sup_builder)
+    let init_state = PushSumState(
+                        0,
+                        0,
+                        neb_list: [],
+                    )
+
+
+    let #(builder, nodes_list) = topology.create_connections(
+        num_nodes,
+        init_state,
+        handle_pushsum,
+        sup_builder,
+        topology,
+    )
 
     supervisor.start(builder)
+    list.each(nodes_list, fn (a) {
+
+                    let topology.NodeMappings(parent_actor, neb_actors) = a
+
+                    process.send(parent_actor, InitActorState(neb_actors))
+                }
+    )
 
     process.receive_forever(main_sub)
-
-    let _nodes_list = topology.create_connections(actors_list, topology)
 }
 
 fn handle_pushsum(
@@ -42,5 +63,23 @@ fn handle_pushsum(
     msg: PushSumMessage,
     ) -> actor.Next(PushSumState, PushSumMessage) {
 
-todo
+    case msg {
+
+        InitActorState(neb_actors) -> {
+
+            let new_state = PushSumState(
+                ..state,
+                neb_list: neb_actors,
+            )
+
+            actor.continue(new_state)
+        }
+
+        SumWeight(s, w) -> {
+
+            io.println("[PUSHSUM_ACTOR]: received s: " <> int.to_string(s) <> " ,w: " <> int.to_string(w))
+            actor.continue(state)
+        }
+
+    }
 }

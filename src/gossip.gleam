@@ -46,18 +46,23 @@ pub fn start(num_nodes: Int, topology: topology.Type) {
                         neb_list: [],
                     )
 
-    let #(builder, actors_list) = utls.start_actors(num_nodes, init_state, handle_gossip, sup_builder)
+
+    let #(builder, nodes_list) = topology.create_connections(
+        num_nodes,
+        init_state,
+        handle_gossip,
+        sup_builder,
+        topology,
+    )
 
     supervisor.start(builder)
-
-    topology.create_connections(actors_list, topology)
-    |> list.each(fn (a) {
+    list.each(nodes_list, fn (a) {
 
                     let topology.NodeMappings(parent_actor, neb_actors) = a
 
                     process.send(parent_actor, InitActorState(neb_actors))
                 }
-       )
+    )
 
     process.receive_forever(main_sub)
 
@@ -92,7 +97,7 @@ fn handle_gossip(
         }
 
         HearRumor(id) -> {
-            io.println("got rumor " <> int.to_string(id))
+            io.println("[GOSSIP_ACTOR]: got rumor " <> int.to_string(id))
             actor.continue(state)
         }
     }

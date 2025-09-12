@@ -11,21 +11,15 @@ pub type Type {
     Imp3D
 }
 
-pub type Message {
+pub type NodeMappings(message) {
 
-    Rumor(id: Int)
-
-    SumWeight(s: Int, w: Int)
-}
-pub type NodeMappings {
-
-    NodeMappings(curr_actor: process.Subject(Message), neighbors: List(process.Subject(Message)))
+    NodeMappings(curr_actor: process.Subject(message), neighbors: List(process.Subject(message)))
 }
 
 pub fn create_connections(
-    actor_list: List(process.Subject(Message)),
+    actor_list: List(process.Subject(message)),
     topology: Type,
-    ) -> NodeMappings {
+    ) -> List(NodeMappings(message)) {
 
 
     case topology {
@@ -38,7 +32,7 @@ pub fn create_connections(
 
 }
 
-fn full(actor_list: List(process.Subject(Message))) -> NodeMappings {todo}
-fn grid3d(actor_list: List(process.Subject(Message))) -> NodeMappings {todo}
-fn line(actor_list: List(process.Subject(Message))) -> NodeMappings {todo}
-fn imp3d(actor_list: List(process.Subject(Message))) -> NodeMappings {todo}
+fn full(_actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {todo}
+fn grid3d(_actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {todo}
+fn line(_actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {todo}
+fn imp3d(_actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {todo}

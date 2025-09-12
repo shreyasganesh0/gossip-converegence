@@ -72,11 +72,15 @@ pub fn main() -> Nil {
             }
             case algorithm {
 
-                "gossip" -> gossip.start(num_nodes, topo)
+                "gossip" -> {
+                    gossip.start(num_nodes, topo)
+                    Nil
+                }
 
                 _ -> {
 
                     push_sum.start(num_nodes, topo)
+                    Nil
                 }
             }
         }

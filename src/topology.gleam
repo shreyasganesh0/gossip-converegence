@@ -1,5 +1,7 @@
 import gleam/erlang/process
 
+import gleam/list
+
 pub type Type {
 
     Full
@@ -32,7 +34,24 @@ pub fn create_connections(
 
 }
 
-fn full(_actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {todo}
+fn full(actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {
+
+    let mapping_list: List(NodeMappings(message)) = []
+    list.fold(actor_list, mapping_list, fn(node_list, actor) {
+
+            
+            [NodeMappings(curr_actor: actor, neighbors: list.filter(actor_list, fn(a) {
+
+                                                                                   a != actor 
+                                                                                }
+                                                        )
+                         ),
+            ..node_list
+            ]
+        }
+    )
+}
+
 fn grid3d(_actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {todo}
 fn line(_actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {todo}
 fn imp3d(_actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {todo}

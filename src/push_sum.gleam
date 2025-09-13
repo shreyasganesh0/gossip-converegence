@@ -8,7 +8,6 @@ import gleam/otp/static_supervisor as supervisor
 import gleam/erlang/process
 
 import topology
-import utls
 
 pub type PushSumMessage {
 
@@ -46,7 +45,7 @@ pub fn start(num_nodes: Int, topology: topology.Type) {
         topology,
     )
 
-    supervisor.start(builder)
+    let _ = supervisor.start(builder)
     list.each(nodes_list, fn (a) {
 
                     let topology.NodeMappings(parent_actor, neb_actors) = a

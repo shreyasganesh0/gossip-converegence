@@ -32,8 +32,6 @@ pub fn create_connections(
     ) -> #(supervisor.Builder, List(NodeMappings(message))) {
 
     assert num_nodes > 0
-    todo as "need to add and error case instead of this assert"
-
 
     let #(node_count, topo_creator) = case topology {
 
@@ -111,15 +109,13 @@ fn full(actor_list: List(process.Subject(message))) -> List(NodeMappings(message
 
 fn grid3d(_actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {
 
-    let mapping_list: List(NodeMappings(message)) = []
+    let _mapping_list: List(NodeMappings(message)) = []
 
     
 
 }
 
 fn line(actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {
-
-    let mapping_list: List(NodeMappings(message)) = []
 
     let tmp_list = actor_list
 
@@ -133,7 +129,7 @@ fn line(actor_list: List(process.Subject(message))) -> List(NodeMappings(message
             [NodeMappings(first, [second]), NodeMappings(second, [first])]
         }
 
-        [first, second, ..rest] -> {
+        [first, second, ..] -> {
 
             let mapping_list = [NodeMappings(first, [second])]
 

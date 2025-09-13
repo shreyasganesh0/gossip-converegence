@@ -1,5 +1,4 @@
 import gleam/list
-import gleam/result
 
 import gleam/otp/static_supervisor as supervisor
 import gleam/otp/supervision
@@ -38,7 +37,8 @@ pub fn start_actors(
 fn start_actor(
     handler: fn(state, message) -> actor.Next(state, message), state: state
     ) -> actor.StartResult(process.Subject(message)) {
-    actor.new(state)
-    |> actor.on_message(handler)
-    |> actor.start
+
+        actor.new(state)
+        |> actor.on_message(handler)
+        |> actor.start
 }

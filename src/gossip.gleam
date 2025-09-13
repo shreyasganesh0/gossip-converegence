@@ -1,6 +1,7 @@
 import gleam/list
 import gleam/int
 import gleam/io
+import gleam/option.{Some, None}
 import gleam/dict.{type Dict}
 
 import gleam/otp/actor
@@ -9,27 +10,22 @@ import gleam/otp/static_supervisor as supervisor
 import gleam/erlang/process
 
 import topology
-import utls
 
 pub type GossipMessage {
     
-    InitActorState(neb_actors: List(process.Subject(GossipMessage)))
+    InitActorState(neb_actors: List(process.Subject(GossipMessage)), id: Int)
 
     HearRumor(id: Int)
-
-    PropogateRumor(id: Int)
 }
 
-pub type RumorMap {
-
-    RumorMap(count_map: Dict(Int, Int))
-}
 
 pub type GossipState {
 
     GossipState(
         id: Int,
-        rumor_map: RumorMap,
+        max_rumors: Int, 
+        main_sub: process.Subject(Nil),
+        rumor_map: Dict(Int, Int),
         neb_list: List(process.Subject(GossipMessage)),
     )
 }
@@ -42,29 +38,38 @@ pub fn start(num_nodes: Int, topology: topology.Type) {
 
     let init_state = GossipState(
                         0,
-                        RumorMap(dict.from_list([])),
+                        10,
+                        main_sub,
+                        dict.from_list([]),
                         neb_list: [],
                     )
 
 
     let #(builder, nodes_list) = topology.create_connections(
-        num_nodes,
-        init_state,
-        handle_gossip,
-        sup_builder,
-        topology,
-    )
+                                    num_nodes,
+                                    init_state,
+                                    handle_gossip,
+                                    sup_builder,
+                                    topology,
+                                )
 
-    supervisor.start(builder)
-    list.each(nodes_list, fn (a) {
+    let _ = supervisor.start(builder)
+    let _ = list.fold(nodes_list, 1, fn (id, a) {
 
                     let topology.NodeMappings(parent_actor, neb_actors) = a
 
-                    process.send(parent_actor, InitActorState(neb_actors))
+                    process.send(parent_actor, InitActorState(neb_actors, id))
+
+                    id + 1
                 }
     )
 
-    process.receive_forever(main_sub)
+    let assert [topology.NodeMappings(first, _), ..] = nodes_list
+
+    process.send(first, HearRumor(0xA0))
+
+    list.range(1, num_nodes) 
+    |> list.each(fn(_) {process.receive(main_sub, 1000)})
 
 }
 
@@ -76,29 +81,59 @@ fn handle_gossip(
     
     case msg {
 
-        InitActorState(neb_actors) -> {
+        InitActorState(neb_actors, id) -> {
 
             let new_state = GossipState(
                                 ..state,
+                                id: id,
                                 neb_list: neb_actors
                             )
-            echo neb_actors
+            echo new_state 
             actor.continue(new_state)
         }
 
-        PropogateRumor(rumor_id) -> {
 
-            list.each(state.neb_list, fn(neb_sub) {
+        HearRumor(rumor_id) -> {
+            //io.println("[GOSSIP_ACTOR]: got rumor " <> int.to_string(rumor_id) <> " in actor " <> int.to_string(state.id))
 
-                                      process.send(neb_sub, HearRumor(1))
-                                  }
-            )
-            actor.continue(state)
-        }
+            let increment_count = fn(x) {
 
-        HearRumor(id) -> {
-            io.println("[GOSSIP_ACTOR]: got rumor " <> int.to_string(id))
-            actor.continue(state)
+                case x {
+
+                    Some(rumor_count) -> {
+
+                        rumor_count + 1
+                    }
+
+                    None -> 1
+                }
+            }
+
+            let new_state = GossipState(
+                                ..state,
+                                rumor_map: dict.upsert(state.rumor_map, rumor_id, increment_count)
+                            )
+            let assert Ok(rumor_heard_count) = dict.get(new_state.rumor_map, rumor_id) 
+
+            case rumor_heard_count < state.max_rumors { 
+
+                True -> {
+                    list.each(state.neb_list, fn(neb_sub) {
+                                          process.send(neb_sub, HearRumor(rumor_id))
+                                      }
+                    )
+                    actor.continue(new_state)
+                }
+
+                False -> {
+
+                    io.println("[GOSSIP_ACTOR]: " <> int.to_string(state.id) <> " finished rumor sending" )
+                    process.send(state.main_sub, Nil)
+                    actor.stop()
+                }
+            }
+
+
         }
     }
 }

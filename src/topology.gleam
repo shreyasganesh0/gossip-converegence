@@ -31,6 +31,9 @@ pub fn create_connections(
     topology: Type,
     ) -> #(supervisor.Builder, List(NodeMappings(message))) {
 
+    assert num_nodes > 0
+    todo as "need to add and error case instead of this assert"
+
 
     let #(node_count, topo_creator) = case topology {
 
@@ -110,8 +113,48 @@ fn grid3d(_actor_list: List(process.Subject(message))) -> List(NodeMappings(mess
 
     let mapping_list: List(NodeMappings(message)) = []
 
+    
 
 }
 
-fn line(_actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {todo}
+fn line(actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {
+
+    let mapping_list: List(NodeMappings(message)) = []
+
+    let tmp_list = actor_list
+
+    
+    case tmp_list {
+
+
+        [first] -> [NodeMappings(first, [])]
+
+        [first, second] -> {
+            [NodeMappings(first, [second]), NodeMappings(second, [first])]
+        }
+
+        [first, second, ..rest] -> {
+
+            let mapping_list = [NodeMappings(first, [second])]
+
+            let #(map_list, last_trip) = list.window(actor_list, 3)
+            |> list.fold(#(mapping_list, []), fn(duo, curr_triple) {
+
+                            let #(node_list, _) = duo 
+                            let assert [first, second, third] = curr_triple
+                            #(
+                            [NodeMappings(second, [first, third]), ..node_list],
+                            curr_triple
+                            )
+                        }
+                )
+
+            let assert [_, b, c] = last_trip
+            [NodeMappings(c, [b]), ..map_list]
+        }
+
+        _ -> []
+    }
+
+}
 fn imp3d(_actor_list: List(process.Subject(message))) -> List(NodeMappings(message)) {todo}

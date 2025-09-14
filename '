@@ -1,6 +1,5 @@
 import gleam/io
 import gleam/int
-import gleam/float
 import gleam/list
 
 import gleam/otp/actor
@@ -9,11 +8,10 @@ import gleam/otp/static_supervisor as supervisor
 import gleam/erlang/process
 
 import topology
-import utls
 
 pub type PushSumMessage {
 
-    InitActorState(neb_actors: List(process.Subject(PushSumMessage)), id: Int)
+    InitActorState(neb_actors: List(process.Subject(PushSumMessage)))
 
     SumWeight(s: Float, w: Float)
 }
@@ -21,12 +19,10 @@ pub type PushSumMessage {
 pub type PushSumState {
     
     PushSumState(
-        id: Int,
-        changed_count: Int,
-        s: Float,
+        x: Float,
         w: Float,
-        sum_estimate: Float,
-        main_sub: process.Subject(Nil),
+        id: Int,
+        change_count: Int,
         neb_list: List(process.Subject(PushSumMessage)),
     )
 }
@@ -39,10 +35,8 @@ pub fn start(num_nodes: Int, topology: topology.Type) {
     let init_state = PushSumState(
                         0,
                         0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        main_sub,
+                        0,
+                        0,
                         neb_list: [],
                     )
 
@@ -61,16 +55,10 @@ pub fn start(num_nodes: Int, topology: topology.Type) {
                     let topology.NodeMappings(parent_actor, neb_actors) = a
 
                     process.send(parent_actor, InitActorState(neb_actors, id))
-
-                    id + 1
                 }
     )
-    
-    let #(_, topology.NodeMappings(start_actor, _)) = utls.get_random_list_element(nodes_list)
-    process.send(start_actor, SumWeight(s: 0.0, w: 0.0))
 
-    list.range(1, num_nodes) 
-    |> list.each(fn(_) {process.receive(main_sub, 1000)})
+    process.receive_forever(main_sub)
 }
 
 fn handle_pushsum(
@@ -82,11 +70,8 @@ fn handle_pushsum(
 
         InitActorState(neb_actors, id) -> {
 
-            echo id
             let new_state = PushSumState(
                 ..state,
-                s: int.to_float(id),
-                w: 1.0, 
                 id: id,
                 neb_list: neb_actors,
             )
@@ -94,19 +79,40 @@ fn handle_pushsum(
             actor.continue(new_state)
         }
 
-
         SumWeight(s, w) -> {
 
-            //io.println("[PUSHSUM_ACTOR]: " <> int.to_string(state.id) <> " received s: " <> float.to_string(s) <> " ,w: " <> float.to_string(w))
+            io.println("[PUSHSUM_ACTOR]: received s: " <> int.to_string(s) <> " ,w: " <> int.to_string(w))
+            let new_state = PushSumState(
+                ..state,
+                s: state.s + s,
+                w: state.w + w,
+            )
 
-            let #(idx, send_actor) = utls.get_random_list_element(state.neb_list)
-            let send_s = {state.s +. s} /. 2.0
-            let send_w = {state.w +. w} /. 2.0
+            let send_idx = list.length(state.neb_list)
+            |> int.random
 
-            let sum_estimate = state.s /. state.w
-            let diff = float.absolute_value(sum_estimate -. state.sum_estimate) 
-            echo diff
-            case diff <=. 10.0e-10 {
+            let #(_, send_actor) = list.fold_until(state.neb_list, *(0, tmp_actor), fn(tup, actor) {
+
+                                                                    let #(idx, curr_actor) = tup
+                                                                    case idx < send_idx {
+
+                                                                        True -> Continue(#(
+                                                                                            idx + 1, 
+                                                                                            actor
+                                                                                         )
+                                                                                )
+
+                                                                        False -> Stop(#(idx, actor))
+                                                                    }
+                                                                }
+                                    )
+
+            let send_s = {state.s + s} /. 2
+            let send_w = {state.w + w} /. 2
+
+            let sum_estimate = send_s /. send_w
+
+            case float.absolute_value(sum_estimate -. state.sum_esitimate) <= 10.0e-10 {
 
                 True -> {
 
@@ -115,7 +121,6 @@ fn handle_pushsum(
                         True -> {
 
                             io.println("[PUSHSUM_ACTOR]: " <> int.to_string(state.id) <> " has terminated")
-                            process.send(state.main_sub, Nil)
                             actor.stop() 
                         }
 
@@ -123,11 +128,8 @@ fn handle_pushsum(
 
                             let new_state = PushSumState(
                                                 ..state,
-                                                s: send_s,
-                                                w: send_w,
                                                 changed_count: state.changed_count + 1,
                                             )
-                            process.send(send_actor, SumWeight(send_s, send_w))
 
                             actor.continue(new_state)
 
@@ -141,15 +143,22 @@ fn handle_pushsum(
                                         ..state,
                                         s: send_s,
                                         w: send_w,
-                                        sum_estimate: sum_estimate, 
-                                        changed_count: 0,
-                                    )
-                    process.send(send_actor, SumWeight(send_s, send_w))
+                                        sum_estimate: 
 
-                    actor.continue(new_state)
+                                    )
                 }
             }
 
+            let new_state = PushSumState(
+                ..state,
+                s: send_s,
+                w: send_w,
+            )
+
+
+            process.send(send_actor, SumWeight(new
+
+            actor.continue(state)
         }
 
     }

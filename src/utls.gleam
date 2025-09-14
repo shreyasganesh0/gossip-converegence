@@ -1,4 +1,5 @@
-import gleam/list
+import gleam/int
+import gleam/list.{ Continue, Stop}
 
 import gleam/otp/static_supervisor as supervisor
 import gleam/otp/supervision
@@ -41,4 +42,27 @@ fn start_actor(
         actor.new(state)
         |> actor.on_message(handler)
         |> actor.start
+}
+
+pub fn get_random_list_element(element_list: List(a)) -> #(Int, a) {
+
+            let send_idx = list.length(element_list)
+            |> int.random
+
+            let assert Ok(tmp) = list.first(element_list)
+            list.fold_until(element_list, #(0, tmp), fn(tup, actor) {
+
+                                                                    let #(idx, _curr_actor) = tup
+                                                                    case idx < send_idx {
+
+                                                                        True -> Continue(#(
+                                                                                            idx + 1, 
+                                                                                            actor
+                                                                                         )
+                                                                                )
+
+                                                                        False -> Stop(#(idx, actor))
+                                                                    }
+                                                                }
+                                    )
 }

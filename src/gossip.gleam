@@ -10,6 +10,7 @@ import gleam/otp/static_supervisor as supervisor
 import gleam/erlang/process
 
 import topology
+import utls
 
 pub type GossipMessage {
     
@@ -26,6 +27,7 @@ pub type GossipState {
         max_rumors: Int, 
         main_sub: process.Subject(Nil),
         rumor_map: Dict(Int, Int),
+        finished: Bool,
         neb_list: List(process.Subject(GossipMessage)),
     )
 }
@@ -41,6 +43,7 @@ pub fn start(num_nodes: Int, topology: topology.Type) {
                         10,
                         main_sub,
                         dict.from_list([]),
+                        False,
                         neb_list: [],
                     )
 
@@ -64,9 +67,10 @@ pub fn start(num_nodes: Int, topology: topology.Type) {
                 }
     )
 
-    let assert [topology.NodeMappings(first, _), ..] = nodes_list
+    
+    let #(_, topology.NodeMappings(start_actor, _)) = utls.get_random_list_element(nodes_list)
 
-    process.send(first, HearRumor(0xA0))
+    process.send(start_actor, HearRumor(0xA0))
 
     list.range(1, num_nodes) 
     |> list.each(fn(_) {process.receive(main_sub, 1000)})
@@ -88,7 +92,7 @@ fn handle_gossip(
                                 id: id,
                                 neb_list: neb_actors
                             )
-            echo new_state 
+           // echo new_state 
             actor.continue(new_state)
         }
 
@@ -115,21 +119,35 @@ fn handle_gossip(
                             )
             let assert Ok(rumor_heard_count) = dict.get(new_state.rumor_map, rumor_id) 
 
-            case rumor_heard_count < state.max_rumors { 
+            let #(_, send_actor) = utls.get_random_list_element(state.neb_list)
+            case rumor_heard_count < state.max_rumors {  
 
                 True -> {
-                    list.each(state.neb_list, fn(neb_sub) {
-                                          process.send(neb_sub, HearRumor(rumor_id))
-                                      }
-                    )
+                    process.send(send_actor, HearRumor(rumor_id))
                     actor.continue(new_state)
                 }
 
                 False -> {
+                        
+                        process.send(send_actor, HearRumor(rumor_id))
+                        case state.finished {
+                            False -> {
+                                io.println("[GOSSIP_ACTOR]: " <> int.to_string(state.id) <> " finished rumor sending" )
 
-                    io.println("[GOSSIP_ACTOR]: " <> int.to_string(state.id) <> " finished rumor sending" )
-                    process.send(state.main_sub, Nil)
-                    actor.stop()
+                                let new_state = GossipState(
+                                                    ..state,
+                                                    finished: True,
+                                                    rumor_map: dict.upsert(state.rumor_map,
+                                                                            rumor_id,
+                                                                            increment_count
+                                                                ),
+                                                )
+                                process.send(state.main_sub, Nil)
+                                actor.continue(new_state)
+                            }
+
+                            True -> actor.continue(state)
+                        }
                 }
             }
 

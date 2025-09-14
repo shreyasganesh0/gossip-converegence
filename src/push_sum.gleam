@@ -120,7 +120,7 @@ fn handle_pushsum(
 
 //            io.println("[PUSHSUM_ACTOR]: " <> int.to_string(state.id) <> " received s: " <> float.to_string(s) <> " ,w: " <> float.to_string(w))
 
-            let #(idx, send_actor) = utls.get_random_list_element(state.neb_list)
+            let #(_idx, send_actor) = utls.get_random_list_element(state.neb_list)
             let send_s = {state.s +. s} /. 2.0
             let send_w = {state.w +. w} /. 2.0
 

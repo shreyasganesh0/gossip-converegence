@@ -1,4 +1,5 @@
 import gleam/int
+import gleam/float
 import gleam/list.{ Continue, Stop}
 
 import gleam/otp/static_supervisor as supervisor
@@ -65,4 +66,49 @@ pub fn get_random_list_element(element_list: List(a)) -> #(Int, a) {
                                                                     }
                                                                 }
                                     )
+}
+
+fn find_first_factor(n: Int, from from: Int) -> Int {
+
+  case from <= 1 {
+
+    True -> 1
+
+    False -> { 
+
+      case n % from == 0 {
+
+        True -> from
+
+        False ->  find_first_factor(n, from: from - 1)
+      }
+    }
+  }
+  
+}
+
+fn find_best_factors(n: Int) -> #(Int, Int, Int) {
+
+    let assert Ok(c) =  float.power(int.to_float(n), 1.0 /. 3.0) 
+    let cbrt = float.round(c)
+
+    let h = find_first_factor(n, from: cbrt)
+
+    let area = n / h
+    let assert Ok(s) = float.square_root(int.to_float(area)) 
+    let sqrt = float.round(s)
+    let d = find_first_factor(area, from: sqrt)
+
+    let w = area / d
+
+    #(w, d, h)
+}
+
+pub fn factorize_grid(n: Int) -> #(Int, #(Int, Int, Int)) {
+  let #(w, d, h) = find_best_factors(n)
+
+  case w > 1 && d > 1 {
+    True -> #(n, #(w, d, h))
+    False -> factorize_grid(n + 1)
+  }
 }

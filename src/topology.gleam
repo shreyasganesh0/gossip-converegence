@@ -196,57 +196,7 @@ fn imp3d(
     actor_list: List(process.Subject(message))
     ) -> List(NodeMappings(message)) {
 
-    let Dimension(num_nodes, w, d, h) = node_count
-    
-    let indexed_actors = list.index_map(actor_list, fn(actor, i) { #(i, actor) })
-
-    list.index_map(actor_list, fn(actor, i) {
-
-            let z = i / {w * d}
-            let y = {i % {w * d}}/ w
-            let x = i % w
-
-            let potential_neighbor_coords = [
-              #(x + 1, y, z),
-              #(x - 1, y, z),
-              #(x, y + 1, z),
-              #(x, y - 1, z),
-              #(x, y, z + 1),
-              #(x, y, z - 1),
-            ]
-
-            let neighbors = list.filter_map(potential_neighbor_coords,
-                                            fn(coord) {
-
-
-                                                let #(nx, ny, nz) = coord
-                                                let is_in_bounds = nx >= 0 && nx < w &&
-                                                        ny >= 0 && ny < d && nz >= 0 && nz < h
-
-                                                case is_in_bounds {
-
-                                                    True -> {
-                                                        let neighbor_index = {nz * w * d} + {ny * w} + nx
-
-                                                        case neighbor_index < num_nodes {
-
-                                                            True -> list.key_find(
-                                                                    indexed_actors,
-                                                                    find: neighbor_index
-                                                                  )
-
-                                                            False -> Error(Nil)
-                                                        }
-                                                    }
-
-                                                    False -> Error(Nil)
-                                                }
-                                            }
-                            )
-
-            NodeMappings(curr_actor: actor, neighbors: neighbors)
-        }
-    ) 
+    grid3d(node_count, actor_list)
     |> list.map(fn(mapping) {
 
                      let NodeMappings(act, nebs) = mapping
@@ -264,7 +214,10 @@ fn imp3d(
 
                          [] -> mapping
 
-                         [first, ..] -> NodeMappings(curr_actor:act, neighbors: [first, ..nebs])
+                         _ -> {
+                             let #(_idx, extra) = utls.get_random_list_element(candidates)
+                             NodeMappings(curr_actor:act, neighbors: [extra, ..nebs])
+                         }
 
                      } 
 

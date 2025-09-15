@@ -1,8 +1,11 @@
 import gleam/list
 import gleam/int
+import gleam/float
 import gleam/io
 import gleam/option.{Some, None}
 import gleam/dict.{type Dict}
+import gleam/time/duration
+import gleam/time/timestamp
 
 import gleam/otp/actor
 import gleam/otp/static_supervisor as supervisor
@@ -55,6 +58,7 @@ pub fn start(num_nodes: Int, topology: topology.Type) {
                                     sup_builder,
                                     topology,
                                 )
+    let start = timestamp.system_time()
 
     let _ = supervisor.start(builder)
     let _ = list.fold(nodes_list, 1, fn (id, a) {
@@ -67,14 +71,21 @@ pub fn start(num_nodes: Int, topology: topology.Type) {
                 }
     )
 
-    
-    let #(_, topology.NodeMappings(start_actor, _)) = utls.get_random_list_element(nodes_list)
-
-    process.send(start_actor, HearRumor(0xA0))
+    list.each(nodes_list, fn(map_actor) {
+                let topology.NodeMappings(actor, _) = map_actor
+                process.send(actor, HearRumor(0xA0))
+             }
+    )
 
     list.range(1, num_nodes) 
-    |> list.each(fn(_) {process.receive(main_sub, 1000)})
+    |> list.each(fn(_) {process.receive(main_sub, 1000000)})
 
+    let end = timestamp.system_time()
+
+    let diff = timestamp.difference(start, end)
+               |> duration.to_seconds
+
+    io.println("Time Taken for Gossip convergence: " <> float.to_string(diff))
 }
 
 fn handle_gossip(

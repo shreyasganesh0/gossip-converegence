@@ -1,0 +1,54 @@
+import gleam/otp/actor
+import gleam/otp/static_supervisor
+
+type FaultState {
+
+    FaultState
+}
+
+type FaultMessage(message) {
+
+    KillNode(pid: process.Pid)
+    
+    StallNode(sub: process.Subject(message), sleep_message: message)
+}
+
+
+pub fn start_fault_injector(
+    sup_builder: supervisor.Builder,
+    ) -> #(process.Subject(FaultMessage), supervisor.Builder) {
+
+    let act = start_actor()
+    
+    let assert Ok(act_sub) = act
+
+    let builder = superivisor.add(sup_builder, fn() {act})
+
+    #(act_sub.data, builder) 
+}
+
+fn start_actor() -> actor.StartResult(process.Subject(FaultMessage)) {
+
+    actor.start(FaultState)
+    |> actor.on_message(handle_fault)
+    |> actor.start
+}
+
+fn handle_fault(
+    state: FaultState,
+    msg: FaultMessage(message),
+) -> actor.Next(FaultState, FaultMessage(message)) {
+
+    case msg {
+
+        KillNode(pid) -> {
+            
+            process.send_exit(pid)
+        }
+
+        StallNode(sub, slp_msg) -> {
+
+            process.send(sub, slp_msg) 
+        }
+    }
+}

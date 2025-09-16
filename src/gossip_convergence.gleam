@@ -2,6 +2,7 @@ import argv
 
 import gleam/io
 import gleam/int
+import gleam/float
 import gleam/bool
 import gleam/result
 
@@ -13,6 +14,14 @@ pub type ParseError {
 
     InvalidArgs
     WrongArgCount(required: Int)
+}
+
+pub type FailureType {
+
+    NodeFailure(rate: Float)
+
+    LinkFailure(rate: Float)
+
 }
 
 
@@ -43,7 +52,80 @@ pub fn main() -> Nil {
 
                     False -> Error(InvalidArgs)
                 })
-                Ok(#(i_num_nodes, ret_topo, ret_algo))
+                Ok(#(i_num_nodes, ret_topo, ret_algo, LinkFailure(0.0), 100))
+
+            }
+        }
+
+        [num_nodes, topology, algorithm, failure_type, rate, timeout] -> {
+
+             {
+                use i_num_nodes <- result.try(result.map_error(int.parse(num_nodes), 
+                                                                fn(_) {InvalidArgs}
+                                             )
+                                    )
+                use ret_topo <-  result.try(case {topology == "full"}
+                     |> bool.or(topology == "3D")
+                     |> bool.or(topology == "line")
+                     |> bool.or(topology == "imp3D")
+                {
+                    True -> Ok(topology)
+
+                    False -> Error(InvalidArgs)
+                })
+                use ret_algo <- result.try(case {algorithm == "gossip"}
+                     |> bool.or(algorithm == "push-sum")
+                {
+
+                    True -> Ok(algorithm)
+
+                    False -> Error(InvalidArgs)
+                })
+                use f_failure_rate <- result.try(
+                case failure_type {
+
+                    "--node-failure" -> {
+
+                        echo "node failure selected"
+
+                        result.map_error(
+                            fn() {
+
+                                case float.parse(rate) {
+
+                                        Ok(r) -> Ok(NodeFailure(r))
+
+                                        Error(err) -> Error(err)
+                                }
+                            }(),
+                            fn(_) {InvalidArgs}
+                        )
+                    }
+
+                    "--link-failure" -> {
+
+                        echo "link failure selected"
+
+                        result.map_error(
+
+                            fn() {
+
+                                case float.parse(rate) {
+
+                                        Ok(r) -> Ok(LinkFailure(r))
+
+                                        Error(err) -> Error(err)
+                                }
+                            }(),
+                            fn(_) {InvalidArgs}
+                        )
+
+                    }
+
+                    _ -> Error(InvalidArgs)
+                })
+                use tout <- result.try(result.map_error(int.parse(timeout), fn(_) {InvalidArgs})) 
+                Ok(#(i_num_nodes, ret_topo, ret_algo, f_failure_rate, tout))
 
             }
         }
@@ -54,13 +136,8 @@ pub fn main() -> Nil {
     case ret {
 
 
-        Ok(#(num_nodes, topology, algorithm)) -> {
+        Ok(#(num_nodes, topology, algorithm, failure_rate, timeout)) -> {
 
-            io.println("[MAIN]: starting gossip for " <> 
-                "num_nodes: " <> int.to_string(num_nodes) <> 
-                ", topology: " <> topology <> 
-                ", algorithm: " <> algorithm
-            )
 
             let topo = case topology {
 
@@ -70,16 +147,44 @@ pub fn main() -> Nil {
                 "imp3D" -> topology.Imp3D
                 _ -> panic as "[MAIN]: this should never happen. Matched some random topo"
             }
+
+            let #(nfr, lfr) = case failure_rate {
+
+                NodeFailure(r) ->{
+
+                    io.println("[MAIN]: starting gossip for " <> 
+                        "num_nodes: " <> int.to_string(num_nodes) <> 
+                        ", topology: " <> topology <> 
+                        ", algorithm: " <> algorithm <>
+                        ", failure_rate: " <> float.to_string(r) <>
+                        ", timeout: " <> int.to_string(timeout)
+                    )
+                     #(r, 0.0) 
+                }
+
+                LinkFailure(r) -> { 
+
+                    io.println("[MAIN]: starting gossip for " <> 
+                        "num_nodes: " <> int.to_string(num_nodes) <> 
+                        ", topology: " <> topology <> 
+                        ", algorithm: " <> algorithm <>
+                        ", failure_rate: " <> float.to_string(r) <>
+                        ", timeout: " <> int.to_string(timeout)
+                    )
+                    #(0.0, r)
+                }
+            }
+
             case algorithm {
 
                 "gossip" -> {
-                    gossip.start(num_nodes, topo)
+                    gossip.start(num_nodes, topo, nfr, lfr, timeout)
                     Nil
                 }
 
                 _ -> {
 
-                    push_sum.start(num_nodes, topo)
+                    push_sum.start(num_nodes, topo, nfr, lfr, timeout) 
                     Nil
                 }
             }

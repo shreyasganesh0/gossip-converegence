@@ -28,15 +28,24 @@ pub type PushSumState {
     PushSumState(
         id: Int,
         changed_count: Int,
+        timeout: Int,
         s: Float,
         w: Float,
         sum_estimate: Float,
+        failure_rate: Float,
+        link_failure_prob: Float,
         main_sub: process.Subject(Nil),
         finished: Bool,
         neb_list: List(process.Subject(PushSumMessage)),
     )
 }
-pub fn start(num_nodes: Int, topology: topology.Type) {
+pub fn start(
+    num_nodes: Int, 
+    topology: topology.Type, 
+    failure_rate: Float, 
+    link_failure_prob: Float,
+    timeout: Int
+    ) {
 
     let main_sub = process.new_subject()
 
@@ -45,9 +54,12 @@ pub fn start(num_nodes: Int, topology: topology.Type) {
     let init_state = PushSumState(
                         0,
                         0,
+                        timeout,
                         0.0,
                         0.0,
                         0.0,
+                        failure_rate,
+                        link_failure_prob,
                         main_sub,
                         False,
                         neb_list: [],
@@ -135,6 +147,25 @@ fn handle_pushsum(
 
 //            io.println("[PUSHSUM_ACTOR]: " <> int.to_string(state.id) <> " received s: " <> float.to_string(s) <> " ,w: " <> float.to_string(w))
 
+            case {int.random(101) + 1} <= float.round(state.failure_rate *. 100.0) {
+
+                True -> {
+                    io.println("[PUSHSUM_ACTOR]: Node failiing... shutting down")
+                    process.sleep(state.timeout)
+                }
+
+                False -> {
+                    Nil
+                }
+            }
+
+            let timeout = case {int.random(100) + 1} <= 
+                float.round(state.link_failure_prob *. 100.0) {
+
+                True -> state.timeout
+
+                False -> 0
+            }
             let #(_idx, send_actor) = utls.get_random_list_element(state.neb_list)
             let send_s = {state.s +. s} /. 2.0
             let send_w = {state.w +. w} /. 2.0
@@ -144,7 +175,7 @@ fn handle_pushsum(
 
             //echo diff <=. 10.0e-10
             
-            process.send(send_actor, SumWeight(send_s, send_w))
+            process.send_after(send_actor, timeout, SumWeight(send_s, send_w))
             case diff <=. 10.0e-10 {
 
                 True -> {
@@ -153,7 +184,7 @@ fn handle_pushsum(
 
                         True -> {
 
-                            io.println("[PUSHSUM_ACTOR]: " <> int.to_string(state.id) <> " has terminated with sum_estimate " <> float.to_string(sum_estimate))
+                            //io.println("[PUSHSUM_ACTOR]: " <> int.to_string(state.id) <> " has terminated with sum_estimate " <> float.to_string(sum_estimate))
                             process.send(state.main_sub, Nil)
                             let new_state = PushSumState(
                                                 ..state,
@@ -194,8 +225,6 @@ fn handle_pushsum(
                     actor.continue(new_state)
                 }
             }
-
         }
-
     }
 }

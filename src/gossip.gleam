@@ -28,6 +28,9 @@ pub type GossipState {
     GossipState(
         id: Int,
         max_rumors: Int, 
+        timeout: Int,
+        failure_rate: Float,
+        link_failure_prob: Float,
         main_sub: process.Subject(Nil),
         rumor_map: Dict(Int, Int),
         finished: Bool,
@@ -35,7 +38,13 @@ pub type GossipState {
     )
 }
 
-pub fn start(num_nodes: Int, topology: topology.Type) {
+pub fn start(
+    num_nodes: Int,
+    topology: topology.Type,
+    failure_rate: Float,
+    link_failure_prob: Float,
+    timeout: Int,
+    ) {
 
     let main_sub = process.new_subject()
 
@@ -44,6 +53,9 @@ pub fn start(num_nodes: Int, topology: topology.Type) {
     let init_state = GossipState(
                         0,
                         10,
+                        timeout,
+                        failure_rate,
+                        link_failure_prob,
                         main_sub,
                         dict.from_list([]),
                         False,
@@ -111,6 +123,27 @@ fn handle_gossip(
         HearRumor(rumor_id) -> {
             //io.println("[GOSSIP_ACTOR]: got rumor " <> int.to_string(rumor_id) <> " in actor " <> int.to_string(state.id))
 
+            case {int.random(100) + 1} <= float.round(state.failure_rate *. 100.0) {
+
+                True -> {
+                    io.println("[PUSHSUM_ACTOR]: Node failiing... shutting down")
+
+                    process.sleep(state.timeout)
+
+                }
+
+                False -> {
+                    Nil
+                }
+            }
+
+            let timeout = case {int.random(100) + 1} <= 
+                float.round(state.link_failure_prob *. 100.0) {
+
+                True -> state.timeout
+
+                False -> 0
+            }
             let increment_count = fn(x) {
 
                 case x {
@@ -126,21 +159,26 @@ fn handle_gossip(
 
             let new_state = GossipState(
                                 ..state,
-                                rumor_map: dict.upsert(state.rumor_map, rumor_id, increment_count)
+                                rumor_map: dict.upsert(
+                                                state.rumor_map,
+                                                rumor_id, 
+                                                increment_count
+                                            )
                             )
             let assert Ok(rumor_heard_count) = dict.get(new_state.rumor_map, rumor_id) 
 
             let #(_, send_actor) = utls.get_random_list_element(state.neb_list)
+
             case rumor_heard_count < state.max_rumors {  
 
                 True -> {
-                    process.send(send_actor, HearRumor(rumor_id))
+                    process.send_after(send_actor, timeout, HearRumor(rumor_id))
                     actor.continue(new_state)
                 }
 
                 False -> {
                         
-                        process.send(send_actor, HearRumor(rumor_id))
+                        process.send_after(send_actor, timeout, HearRumor(rumor_id))
                         case state.finished {
                             False -> {
                                 io.println("[GOSSIP_ACTOR]: " <> int.to_string(state.id) <> " finished rumor sending" )
@@ -161,8 +199,6 @@ fn handle_gossip(
                         }
                 }
             }
-
-
         }
     }
 }

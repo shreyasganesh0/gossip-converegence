@@ -45,3 +45,17 @@ Team Members - Shreyas Ganesh
     - gossip terminates at 10 "heard" messages
     - push sum terminates based on the s/w ratio as stated in the documentation
 
+### Bonus Details
+```
+gleam run <num_nodes> <algorithm> <topology> [--xxxx-failure failure_rate timeout]
+```
+- --xxxx-failure - this value can be either --link-failure or --node-failure
+- failure rate has to be of type float '0.X' even 0 must be '0.0'
+- timeout is in terms of milliseconds
+
+- sample: 
+```
+gleam run 100 full gossip --link-failure 0.1 100
+```
+- the timeout option is used to dictate how long the link or node is down before being bought back up
+- NOTE: setting this value to 0 will end up with nodes not reaching consensus and the program will only exit on SIGINT, SIGKILL or after 100000 milliseconds since the start of the deadlock
